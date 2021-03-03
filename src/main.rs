@@ -170,7 +170,7 @@ pub async fn handle_app_connect(db: Client, ws: WebSocket) {
 async fn main() {
     pretty_env_logger::init();
 
-    let app:App = App::init("mongodb://localhost:27017/map").await.unwrap();
+    let app:App = App::init("mongodb://localhost:27017/test").await.unwrap();
 
     let routes = warp::path("ws")
         // The `ws()` filter will prepare the Websocket handshake.
