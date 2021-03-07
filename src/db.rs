@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::{errors::Error::MongoQueryError, Result};
 use mongodb::{options::ClientOptions, Client, bson::{doc, Document}};
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 
 #[derive(Clone, Debug)]
 pub struct DB {
