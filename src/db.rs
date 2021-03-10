@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::{errors::Error::MongoQueryError, Result};
 use mongodb::{options::ClientOptions, Client, bson::{doc, Document}};
 use futures::TryFutureExt;
@@ -7,7 +6,8 @@ use futures::TryFutureExt;
 pub struct DB {
     pub client: Client,
     map_fn: String,
-    reduce_fn: String
+    reduce_fn: String,
+    final_fn: String
 }
 
 impl DB {
@@ -22,6 +22,7 @@ impl DB {
             client: client,
             map_fn: String::from("function(){for(let key in this){emit(key,this[key])}};"),
             reduce_fn: String::from("function(key, values){letresult=[];if(Array.isArray(values)){result=values;}else{result.push(values);}return{name:key,values:result}};"),
+            final_fn: String::from("function(key, reducedValue){reducedValue.collection=collection;return reducedValue;};"),
         })
     }
 
@@ -49,18 +50,15 @@ impl DB {
         Ok(map_reduced)
     }
 
-    pub async fn fetch_all_collection_props(&self, database: &str) -> Result<HashMap<String,Document>> {
+    pub async fn fetch_all_collection_props(&self, database: &str) -> Result<Vec<Document>> {
         let db = self.client.database(database);
         let get_names_props = db.list_collection_names(None)
             .map_err(MongoQueryError)
             .map_ok(|names| {
                 names.into_iter().map(|collection| {
-                    let map_reduce = doc! {"mapReduce": &collection, "map": &self.map_fn, "reduce": &self.reduce_fn, "out": {"inline": 1} };
+                    let map_reduce = doc! {"mapReduce": &collection, "map": &self.map_fn, "reduce": &self.reduce_fn, "finalize":&self.final_fn, "out": {"inline": 1}, "scope": {"collection":&collection} };
                     let map_reduced = db.run_command(map_reduce, None)
-                        .map_err(MongoQueryError)
-                        .map_ok(|res: Document| -> Result<(String, Document)> {
-                            Ok((collection, res)) // Tuple - Collection Name, Collection Properties
-                        });
+                        .map_err(MongoQueryError);
                     map_reduced
                 }).collect::<Vec<_>>()
             });
@@ -69,8 +67,7 @@ impl DB {
         let results = futures::future::try_join_all(get_props)
             .await?
             .into_iter()
-            .map(Result::unwrap) // Ignore errors?
-            .collect::<HashMap<String,Document>>();
+            .collect::<Vec<Document>>();
 
         Ok(results)
     }
